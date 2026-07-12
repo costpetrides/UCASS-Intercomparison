@@ -1,0 +1,7 @@
+.DS_Store
+.Rhistory
+__pycache__/
+*.pyc
+.venv/
+.matplotlib/
+.Rproj.user

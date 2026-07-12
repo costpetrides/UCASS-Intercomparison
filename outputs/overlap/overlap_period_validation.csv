@@ -1,0 +1,11 @@
+instrument,UCASS_ID,check,expected,actual,abs_diff,rel_diff,pass
+UCASS,1,sum(conc_i) == sum(dN/dlnDp * dlnDp),2.394282677838446,2.394282677838446,0.0,0.0,True
+UCASS,1,sum(conc_i) == total_counts/total_V,2.394282677838446,2.3942826778384454,4.440892098500626e-16,1.8547902215580725e-16,True
+UCASS,2,sum(conc_i) == sum(dN/dlnDp * dlnDp),0.11641548133373376,0.11641548133373376,0.0,0.0,True
+UCASS,2,sum(conc_i) == total_counts/total_V,0.11641548133373376,0.11641548133373379,2.7755575615628914e-17,2.384182524320858e-16,True
+UCASS,6,sum(conc_i) == sum(dN/dlnDp * dlnDp),1.336916927863474,1.336916927863474,0.0,0.0,True
+UCASS,6,sum(conc_i) == total_counts/total_V,1.336916927863474,1.3369169278634743,2.220446049250313e-16,1.6608706217811198e-16,True
+FIDAS,—,sum(conc_i) == sum(dN/dlnDp * dlnDp),282.58508060651656,282.58508060651656,0.0,0.0,True
+FIDAS,—,sum(conc_i) == sum(N_i)/sum(V) (primary total concentration),282.58508060651656,282.58508060651656,0.0,0.0,True
+FIDAS,—,sum(conc_i) == volume-weighted mean Cn (export cross-check),282.58508060651656,282.9745839838879,0.3895033773713408,0.0013764606414034641,True
+FIDAS,—,conc_i == sum(N_i)/sum(V) per bin (max abs diff),0.0,0.0,0.0,0.0,True

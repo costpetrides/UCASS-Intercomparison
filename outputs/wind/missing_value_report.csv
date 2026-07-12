@@ -1,0 +1,8 @@
+variable,n_missing,pct_missing
+AirTC_C,0,0.0
+RH_pct,0,0.0
+WS_ms,0,0.0
+WindDir_deg,0,0.0
+BP_mbar,0,0.0
+u_ms,0,0.0
+v_ms,0,0.0
