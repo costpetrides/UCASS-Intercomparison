@@ -1,16 +1,9 @@
 import re 
-import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pathlib import Path
-
-_SCRIPTS = Path(__file__).resolve().parent
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
-
-from plot_utils import mask_nonpositive_for_log
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT / "outputs" / "ucass"
@@ -529,86 +522,9 @@ for path in psd_paths:
 # EXPORT TOTALS
 # ============================================================
 
-total_cols = ["Timestamp"]
-for uid in UCASS_IDS:
-    total_cols.extend([
-        f"UCASS{uid}_total_counts",
-        f"UCASS{uid}_total_number_cm3",
-        f"UCASS{uid}_total_volume_um3_cm3",
-        f"UCASS{uid}_total_mass_ug_m3",
-    ])
-total_cols.extend([
-    "WS_ms_Avg",
-    "WindDir",
-    "AirTC_Avg",
-    "RH",
-    "BP_mbar_Avg",
-])
-
-totals = master[total_cols]
-totals_path = OUTPUT_DIR / "UCASS_totals.csv"
-totals.to_csv(totals_path, index=False)
-
-print(totals_path, "saved")
-
-
 # ============================================================
 # PLOTS
 # ============================================================
-
-# NUMBER PSD
-plt.figure(figsize=(8, 6))
-for uid in UCASS_IDS:
-    plt.loglog(
-        ucass_bins[uid],
-        mask_nonpositive_for_log(dNdlnDp[uid]),
-        "-o",
-        label=f"UCASS {uid}",
-    )
-plt.xlabel("Particle Diameter Dp (μm)")
-plt.ylabel("dN/dlnDp (cm$^{-3}$)")
-plt.title("Integrated Number Size Distribution")
-plt.grid(True, which="both")
-plt.legend()
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "integrated_number_psd.png", dpi=300)
-plt.close()
-
-# VOLUME PSD
-plt.figure(figsize=(8, 6))
-for uid in UCASS_IDS:
-    plt.loglog(
-        ucass_bins[uid],
-        mask_nonpositive_for_log(dVdlnDp[uid]),
-        "-o",
-        label=f"UCASS {uid}",
-    )
-plt.xlabel("Particle Diameter Dp (μm)")
-plt.ylabel("dV/dlnDp (μm$^{3}$ cm$^{-3}$)")
-plt.title("Integrated Volume Size Distribution")
-plt.grid(True, which="both")
-plt.legend()
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "integrated_volume_psd.png", dpi=300)
-plt.close()
-
-# MASS PSD
-plt.figure(figsize=(8, 6))
-for uid in UCASS_IDS:
-    plt.loglog(
-        ucass_bins[uid],
-        mask_nonpositive_for_log(dMdlnDp[uid]),
-        "-o",
-        label=f"UCASS {uid}",
-    )
-plt.xlabel("Particle Diameter Dp (μm)")
-plt.ylabel("dM/dlnDp (μg m$^{-3}$)")
-plt.title("Integrated Mass Size Distribution")
-plt.grid(True, which="both")
-plt.legend()
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "integrated_mass_psd.png", dpi=300)
-plt.close()
 
 # TOTAL COUNTS VS TIME
 plt.figure(figsize=(10, 5))
@@ -648,26 +564,6 @@ plt.tight_layout()
 plt.savefig(OUTPUT_DIR / "total_number_vs_time.png", dpi=300)
 plt.close()
 
-# PAIRWISE SCATTER PLOTS
-scatter_pairs = [(1, 2), (1, 6), (2, 6)]
-fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-for ax, (uid_x, uid_y) in zip(axes, scatter_pairs):
-    x = master[f"UCASS{uid_x}_total_number_cm3"]
-    y = master[f"UCASS{uid_y}_total_number_cm3"]
-    ax.scatter(x, y, s=4, alpha=0.4)
-    lo = min(x.min(), y.min())
-    hi = max(x.max(), y.max())
-    ax.plot([lo, hi], [lo, hi], "--", color="gray")
-    ax.set_xlabel(f"UCASS {uid_x} (cm$^{{-3}}$)")
-    ax.set_ylabel(f"UCASS {uid_y} (cm$^{{-3}}$)")
-    ax.set_title(f"UCASS {uid_x} vs {uid_y}")
-    ax.grid(True)
-
-plt.tight_layout()
-plt.savefig(OUTPUT_DIR / "UCASS_intercomparison_scatter.png", dpi=300)
-plt.close()
-
 # TOTAL MASS VS TIME
 plt.figure(figsize=(10, 5))
 for uid in UCASS_IDS:
@@ -689,12 +585,8 @@ plt.close()
 
 print("\nSaved plots:")
 for plot_name in (
-    "integrated_number_psd.png",
-    "integrated_volume_psd.png",
-    "integrated_mass_psd.png",
     "total_counts_vs_time.png",
     "total_number_vs_time.png",
-    "UCASS_intercomparison_scatter.png",
     "total_mass_vs_time.png",
 ):
     print(OUTPUT_DIR / plot_name)

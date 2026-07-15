@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
 """
-UCASS 2 vs UCASS 6 intercomparison — fixed non-overlapping 10-minute bins.
+UCASS 2 vs UCASS 6 intercomparison — fixed non-overlapping bins (10 min and 5 min).
 
   UCASS 2 (AD002): 4.86–6.04 µm  ->  column b3.1
   UCASS 6 (AA006): 4.66–6.02 µm  ->  column b9
 
-Each non-overlapping 10-minute interval = one scatter point:
+Each non-overlapping interval = one scatter point:
   x = sum of UCASS 2 bin counts in that interval
   y = sum of UCASS 6 bin counts in that interval
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import stats
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from plot_utils import format_regression_equation
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT / "outputs" / "ucass"
@@ -34,10 +41,22 @@ CALIBRATION = {
     6: ("AA006", 2, 3, "b{bin}"),
 }
 
-OUTPUT_PNG = OUTPUT_DIR / "UCASS2_vs_UCASS6_bin_scatter_10min.png"
-OUTPUT_CSV = OUTPUT_DIR / "UCASS2_vs_UCASS6_bin_scatter_10min.csv"
 FIGURE_DPI = 300
-AGG_INTERVAL = "10min"
+
+INTERVAL_CONFIGS = [
+    {
+        "agg_interval": "10min",
+        "label": "10 min",
+        "output_png": OUTPUT_DIR / "UCASS2_vs_UCASS6_bin_scatter_10min.png",
+        "output_csv": OUTPUT_DIR / "UCASS2_vs_UCASS6_bin_scatter_10min.csv",
+    },
+    {
+        "agg_interval": "5min",
+        "label": "5 min",
+        "output_png": OUTPUT_DIR / "UCASS2_vs_UCASS6_bin_scatter_5min.png",
+        "output_csv": OUTPUT_DIR / "UCASS2_vs_UCASS6_bin_scatter_5min.csv",
+    },
+]
 
 
 def resolve_bin_column(
@@ -100,6 +119,71 @@ def aggregate_to_fixed_intervals(pairs: pd.DataFrame, interval: str) -> pd.DataF
     )
 
 
+def plot_scatter(
+    intervals: pd.DataFrame,
+    *,
+    interval_label: str,
+    lo2: float,
+    hi2: float,
+    lo6: float,
+    hi6: float,
+    output_png: Path,
+    output_csv: Path,
+) -> None:
+    x = intervals["UCASS2_counts"].to_numpy(dtype=float)
+    y = intervals["UCASS6_counts"].to_numpy(dtype=float)
+
+    r, p_value = stats.pearsonr(x, y)
+    r_squared = r ** 2
+    slope, intercept, _, _, _ = stats.linregress(x, y)
+
+    intervals.to_csv(output_csv, index=False)
+
+    axis_max = max(float(np.max(x)), float(np.max(y)), 1.0) * 1.08
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+    ax.scatter(x, y, s=60, color="#2ca02c", edgecolors="white", linewidths=0.6, zorder=3)
+
+    if x.max() > x.min():
+        x_line = np.linspace(x.min(), x.max(), 100)
+        ax.plot(
+            x_line, slope * x_line + intercept, "--", color="gray",
+            linewidth=1.2, label="OLS fit",
+        )
+
+    ax.plot([0, axis_max], [0, axis_max], ":", color="black", linewidth=0.8, label="1:1 line")
+    ax.set_xlim(0, axis_max)
+    ax.set_ylim(0, axis_max)
+    ax.set_xlabel(f"UCASS 2 counts ({lo2:.2f}–{hi2:.2f} µm, {interval_label})")
+    ax.set_ylabel(f"UCASS 6 counts ({lo6:.2f}–{hi6:.2f} µm, {interval_label})")
+    ax.set_title("UCASS 2 vs UCASS 6", fontsize=11)
+    reg_eq = format_regression_equation(slope, intercept)
+    ax.text(
+        0.98, 0.02,
+        f"{reg_eq}\n$R^2$ = {r_squared:.3f},  r = {r:.3f},  n = {len(intervals)}",
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=9,
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8, edgecolor="none"),
+    )
+    ax.grid(True, alpha=0.4)
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    fig.savefig(output_png, dpi=FIGURE_DPI)
+    plt.close(fig)
+
+    print(f"\nUCASS 2 vs UCASS 6 — fixed {interval_label} bin scatter")
+    print("=" * 55)
+    print(f"Aggregation: non-overlapping {interval_label} intervals")
+    print(f"Intervals: {len(intervals)}")
+    print(f"R²       : {r_squared:.6f}")
+    print(f"r        : {r:.6f}")
+    print(f"p-value  : {p_value:.6e}")
+    print(f"Saved plot: {output_png}")
+    print(f"Saved CSV : {output_csv}")
+
+
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -112,58 +196,25 @@ def main() -> None:
 
     df = load_ucass_csv(UCASS362_CSV)
     per_second = extract_per_second_pairs(df, ucass2_col, ucass6_col)
-    intervals = aggregate_to_fixed_intervals(per_second, AGG_INTERVAL)
 
-    x = intervals["UCASS2_counts"].to_numpy(dtype=float)
-    y = intervals["UCASS6_counts"].to_numpy(dtype=float)
-
-    r, p_value = stats.pearsonr(x, y)
-    r_squared = r ** 2
-    slope, intercept, _, _, _ = stats.linregress(x, y)
-
-    intervals.to_csv(OUTPUT_CSV, index=False)
-
-    fig, ax = plt.subplots(figsize=(7, 6))
-    ax.scatter(x, y, s=60, color="#2ca02c", edgecolors="white", linewidths=0.6, zorder=3)
-
-    if x.max() > x.min():
-        x_line = np.linspace(x.min(), x.max(), 100)
-        ax.plot(x_line, slope * x_line + intercept, "--", color="gray", linewidth=1.2, label="OLS fit")
-
-    ax.plot([0, 25], [0, 25], ":", color="black", linewidth=0.8, label="1:1 line")
-
-    ax.set_xlim(0, 25)
-    ax.set_ylim(0, 25)
-    ax.set_xlabel("UCASS 2 counts (4.86–6.04 µm, 10 min)")
-    ax.set_ylabel("UCASS 6 counts (4.66–6.02 µm, 10 min)")
-    ax.set_title("UCASS 2 vs UCASS 6", fontsize=11)
-    ax.text(
-        0.98, 0.02,
-        f"$R^2$ = {r_squared:.3f},  r = {r:.3f},  n = {len(intervals)}",
-        transform=ax.transAxes,
-        ha="right",
-        va="bottom",
-        fontsize=9,
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8, edgecolor="none"),
-    )
-    ax.grid(True, alpha=0.4)
-    ax.legend(loc="upper left")
-    fig.tight_layout()
-    fig.savefig(OUTPUT_PNG, dpi=FIGURE_DPI)
-    plt.close(fig)
-
-    print("UCASS 2 vs UCASS 6 — fixed 10-minute bin scatter")
+    print("UCASS 2 vs UCASS 6 — selected-bin scatter")
     print("=" * 55)
     print(f"UCASS 2: column {ucass2_col}  ({lo2:.2f}–{hi2:.2f} µm, AD002)")
     print(f"UCASS 6: column {ucass6_col}  ({lo6:.2f}–{hi6:.2f} µm, AA006)")
-    print("Aggregation: non-overlapping 10-minute intervals")
-    print(f"Intervals: {len(intervals)}")
     print(f"Period   : {per_second['Timestamp'].min()} -> {per_second['Timestamp'].max()} UTC")
-    print(f"R²       : {r_squared:.6f}")
-    print(f"r        : {r:.6f}")
-    print(f"p-value  : {p_value:.6e}")
-    print(f"\nSaved plot: {OUTPUT_PNG}")
-    print(f"Saved CSV : {OUTPUT_CSV}")
+
+    for cfg in INTERVAL_CONFIGS:
+        intervals = aggregate_to_fixed_intervals(per_second, cfg["agg_interval"])
+        plot_scatter(
+            intervals,
+            interval_label=cfg["label"],
+            lo2=lo2,
+            hi2=hi2,
+            lo6=lo6,
+            hi6=hi6,
+            output_png=cfg["output_png"],
+            output_csv=cfg["output_csv"],
+        )
 
 
 if __name__ == "__main__":
