@@ -1,6 +1,6 @@
 instrument,UCASS_ID,check,expected,actual,abs_diff,rel_diff,pass
-UCASS,1,sum(conc_i) == sum(dN/dlnDp * dlnDp),2.415271241938659,2.415271241938659,0.0,0.0,True
-UCASS,1,sum(conc_i) == total_counts/total_V,2.415271241938659,2.4152712419386586,4.440892098500626e-16,1.8386722043425928e-16,True
+UCASS,1,sum(conc_i) == sum(dN/dlnDp * dlnDp),2.416293687167546,2.416293687167546,0.0,0.0,True
+UCASS,1,sum(conc_i) == total_counts/total_V,2.416293687167546,2.416293687167546,0.0,0.0,True
 UCASS,2,sum(conc_i) == sum(dN/dlnDp * dlnDp),0.11643095043952366,0.11643095043952366,0.0,0.0,True
 UCASS,2,sum(conc_i) == total_counts/total_V,0.11643095043952366,0.11643095043952366,0.0,0.0,True
 UCASS,6,sum(conc_i) == sum(dN/dlnDp * dlnDp),1.334802246312168,1.334802246312168,0.0,0.0,True

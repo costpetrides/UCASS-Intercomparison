@@ -88,9 +88,9 @@ OUTPUT_MASTER_CSV = OUTPUT_DIR / "UCASS_multi_bin_scatter_10min.csv"
 SCATTER_PAIRS = [(1, 2), (1, 6), (6, 2)]
 
 UCASS_SOURCES = {
-    1: {"csv": UCASS13_CSV, "id_col": "UCASS_ID"},
-    2: {"csv": UCASS362_CSV, "id_col": "UCASS_ID.1"},
-    6: {"csv": UCASS362_CSV, "id_col": "UCASS_ID"},
+    1: {"csv": UCASS13_CSV, "sep": ";", "id_col": "UCASS_ID"},
+    2: {"csv": UCASS362_CSV, "sep": ",", "id_col": "UCASS_ID.1"},
+    6: {"csv": UCASS362_CSV, "sep": ",", "id_col": "UCASS_ID"},
 }
 
 
@@ -120,8 +120,8 @@ def resolve_bin_columns(
     return columns
 
 
-def load_ucass_csv(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path, skiprows=4, sep=",", low_memory=False)
+def load_ucass_csv(path: Path, sep: str = ",") -> pd.DataFrame:
+    df = pd.read_csv(path, skiprows=4, sep=sep, low_memory=False)
     df["Timestamp"] = pd.to_datetime(
         df["GPS_Date"].astype(str) + " " + df["GPS_Time[UTC]"].astype(str),
         format=UCASS_DATE_FORMAT,
@@ -305,7 +305,7 @@ def main() -> None:
     for uid, cfg in UCASS_SOURCES.items():
         csv_path = cfg["csv"]
         if csv_path not in raw_cache:
-            raw_cache[csv_path] = load_ucass_csv(csv_path)
+            raw_cache[csv_path] = load_ucass_csv(csv_path, sep=cfg.get("sep", ","))
         per_second_frames[uid] = extract_per_second_sums(
             raw_cache[csv_path],
             uid,

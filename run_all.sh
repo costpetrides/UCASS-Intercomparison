@@ -21,7 +21,7 @@ echo "Using: $PYTHON"
 "$PYTHON" scripts/ucass_mean_per_bin_psd.py
 "$PYTHON" scripts/ucass_multi_bin_scatter_10min.py
 "$PYTHON" scripts/ucass_multi_bin_scatter_5min.py
-"$PYTHON" scripts/ucass_multi_bin_scatter_5min_by_wind_4ms.py
+"$PYTHON" scripts/ucass_multi_bin_scatter_5min_by_wind_2ms.py
 "$PYTHON" scripts/ucass2_vs_ucass6_bin_scatter.py
 "$PYTHON" scripts/overlap_period_dN_dlnDp_comparison.py
 "$PYTHON" scripts/tsi_mean_psd.py

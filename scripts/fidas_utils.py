@@ -167,7 +167,7 @@ def resolve_common_overlap_period(
 
 UCASS_DATE_FORMAT = "%d/%m/%y %H:%M:%S"
 UCASS_SOURCES = {
-    1: {"csv": "UCASS13.csv", "sep": ",", "id_col": "UCASS_ID"},
+    1: {"csv": "UCASS13.csv", "sep": ";", "id_col": "UCASS_ID"},
     2: {"csv": "UCASS62.csv", "sep": ",", "id_col": "UCASS_ID.1"},
     6: {"csv": "UCASS62.csv", "sep": ",", "id_col": "UCASS_ID"},
 }

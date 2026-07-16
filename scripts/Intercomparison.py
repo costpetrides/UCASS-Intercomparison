@@ -19,7 +19,7 @@ UCASS_IDS = (1, 2, 6)
 UCASS_SOURCES = {
     1: {
         "csv": UCASS27_CSV,
-        "sep": ",",
+        "sep": ";",
         "id_col": "UCASS_ID",
         "bin_suffix": "",
     },

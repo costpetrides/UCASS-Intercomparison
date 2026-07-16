@@ -61,7 +61,7 @@ OUTPUT_VALIDATION_CSV = ROOT / "outputs" / "overlap" / "overlap_period_FIDAS_UCA
 
 UCASS_IDS = (1, 2, 6)
 UCASS_SOURCES = {
-    1: {"csv": UCASS27_CSV, "sep": ",", "id_col": "UCASS_ID", "bin_suffix": ""},
+    1: {"csv": UCASS27_CSV, "sep": ";", "id_col": "UCASS_ID", "bin_suffix": ""},
     2: {"csv": UCASS362_CSV, "sep": ",", "id_col": "UCASS_ID.1", "bin_suffix": ".1"},
     6: {"csv": UCASS362_CSV, "sep": ",", "id_col": "UCASS_ID", "bin_suffix": ""},
 }

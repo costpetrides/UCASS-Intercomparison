@@ -35,10 +35,12 @@ FIGSIZE_WIDE = (12, 5)
 DPI = 300
 
 TOA5_SKIPROWS = 4
-CAMPAIGN_DATES = (
-    pd.Timestamp("2026-07-09").date(),
-    pd.Timestamp("2026-07-10").date(),
-)
+UCASS_DATE_FORMAT = "%d/%m/%y %H:%M:%S"
+UCASS_OVERLAP_SOURCES = {
+    1: {"csv": "UCASS13.csv", "sep": ";", "id_col": "UCASS_ID"},
+    2: {"csv": "UCASS62.csv", "sep": ",", "id_col": "UCASS_ID.1"},
+    6: {"csv": "UCASS62.csv", "sep": ",", "id_col": "UCASS_ID"},
+}
 WIND_DATA_PATTERN = re.compile(
     r'"?(20\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"?,\s*'
     r"(\d+),\s*"
@@ -196,9 +198,52 @@ def load_toa5_file(path: Path) -> pd.DataFrame:
     return df
 
 
+def resolve_experiment_day() -> pd.Timestamp:
+    """Calendar date (UTC) of the UCASS intercomparison from common 1/2/6 overlap."""
+    repo = ROOT
+    master = None
+    raw_cache: dict[tuple[Path, str], pd.DataFrame] = {}
+
+    for uid, cfg in UCASS_OVERLAP_SOURCES.items():
+        csv_path = repo / "data" / "ucass" / cfg["csv"]
+        cache_key = (csv_path, cfg["sep"])
+        if cache_key not in raw_cache:
+            raw = pd.read_csv(csv_path, skiprows=4, sep=cfg["sep"], low_memory=False)
+            raw["Timestamp"] = pd.to_datetime(
+                raw["GPS_Date"].astype(str) + " " + raw["GPS_Time[UTC]"].astype(str),
+                format=UCASS_DATE_FORMAT,
+                errors="coerce",
+            )
+            raw_cache[cache_key] = raw.dropna(subset=["Timestamp"])
+
+        sub = raw_cache[cache_key].loc[
+            raw_cache[cache_key][cfg["id_col"]] == uid, ["Timestamp"]
+        ].copy()
+        if sub["Timestamp"].duplicated().any():
+            sub = sub.groupby("Timestamp", as_index=False).size()[["Timestamp"]]
+
+        master = sub if master is None else pd.merge(
+            master, sub, on="Timestamp", how="inner", validate="one_to_one"
+        )
+
+    if master is None or master.empty:
+        raise RuntimeError("Could not resolve UCASS experiment day from overlap data.")
+
+    return pd.Timestamp(master["Timestamp"].min().date())
+
+
+def campaign_dates() -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Experiment day and the previous calendar day (UTC), inclusive."""
+    experiment = resolve_experiment_day()
+    previous = experiment - pd.Timedelta(days=1)
+    return previous, experiment
+
+
 def filter_campaign_dates(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep only intercomparison campaign days (9/7/26 and 10/7/26)."""
-    mask = df["Timestamp"].dt.date.isin(CAMPAIGN_DATES)
+    """Keep experiment day and the previous day only (exclude the day after)."""
+    day_before, experiment_day = campaign_dates()
+    allowed = {day_before.date(), experiment_day.date()}
+    mask = df["Timestamp"].dt.date.isin(allowed)
     return df.loc[mask].reset_index(drop=True)
 
 
@@ -462,14 +507,6 @@ def plot_timeseries(
 # ---------------------------------------------------------------------------
 # Plotting — wind analysis
 # ---------------------------------------------------------------------------
-
-UCASS_OVERLAP_SOURCES = {
-    1: {"csv": "UCASS13.csv", "sep": ",", "id_col": "UCASS_ID"},
-    2: {"csv": "UCASS62.csv", "sep": ",", "id_col": "UCASS_ID.1"},
-    6: {"csv": "UCASS62.csv", "sep": ",", "id_col": "UCASS_ID"},
-}
-UCASS_DATE_FORMAT = "%d/%m/%y %H:%M:%S"
-
 
 def _ucass_overlap_period_bounds(wind_df: pd.DataFrame) -> tuple[pd.Timestamp, pd.Timestamp]:
     """Inclusive [start, end] where UCASS 1, 2, and 6 all have 1 Hz data with wind."""
@@ -843,13 +880,15 @@ def run_analysis(wind_file: Path | None = None) -> None:
     df = add_derived_columns(df)
     df = filter_campaign_dates(df)
     if df.empty:
+        day_before, experiment_day = campaign_dates()
         raise ValueError(
-            "No wind records for campaign dates "
-            f"{CAMPAIGN_DATES[0]} and {CAMPAIGN_DATES[1]}"
+            "No wind records for meteorology window "
+            f"{day_before.date()} and {experiment_day.date()} (experiment day + previous day)"
         )
     print(f"Records: {len(df):,}")
+    day_before, experiment_day = campaign_dates()
     print(
-        f"Campaign period: {CAMPAIGN_DATES[0]} & {CAMPAIGN_DATES[1]} "
+        f"Meteorology window: {day_before.date()} (previous) & {experiment_day.date()} (experiment) "
         f"({df['Timestamp'].min()} -> {df['Timestamp'].max()} UTC)"
     )
 
@@ -863,6 +902,7 @@ def run_analysis(wind_file: Path | None = None) -> None:
     )
 
     ws = df["WS_ms"].to_numpy(dtype=float)
+    ws_overlap = overlap_df["WS_ms"].to_numpy(dtype=float)
     saved_figures: list[Path] = []
     saved_tables: list[Path] = []
 
@@ -899,11 +939,14 @@ def run_analysis(wind_file: Path | None = None) -> None:
     beaufort = beaufort_frequency_table(ws)
     saved_tables.append(save_csv(beaufort, "beaufort_frequency_table.csv"))
 
-    shape, loc, scale = fit_weibull(ws)
+    shape, loc, scale = fit_weibull(ws_overlap)
     weibull_params = pd.DataFrame([{
         "shape_k": shape,
         "scale_c_ms": scale,
         "location": loc,
+        "period_start_utc": overlap_start,
+        "period_end_utc": overlap_end,
+        "n_samples": int(np.sum(~np.isnan(ws_overlap))),
     }])
     saved_tables.append(save_csv(weibull_params, "weibull_fit_parameters.csv"))
 
@@ -928,9 +971,9 @@ def run_analysis(wind_file: Path | None = None) -> None:
 
     # --- Wind analysis (6–16) ---
     saved_figures.append(plot_wind_rose(df, overlap_start, overlap_end))
-    saved_figures.append(plot_histogram(ws, "Wind speed (m s$^{-1}$)", "Wind Speed Histogram", "wind_speed_histogram.png", bins=30))
+    saved_figures.append(plot_histogram(ws_overlap, "Wind speed (m s$^{-1}$)", "Wind Speed Histogram", "wind_speed_histogram.png", bins=30))
     saved_figures.append(plot_histogram(
-        df["WindDir_deg"].to_numpy(dtype=float),
+        overlap_df["WindDir_deg"].to_numpy(dtype=float),
         "Wind direction (°)",
         "Wind Direction Histogram",
         "wind_direction_histogram.png",
@@ -952,7 +995,7 @@ def run_analysis(wind_file: Path | None = None) -> None:
 
     # --- Weibull (23) ---
     if np.isfinite(shape) and np.isfinite(scale):
-        saved_figures.append(plot_weibull_fit(ws, shape, scale))
+        saved_figures.append(plot_weibull_fit(ws_overlap, shape, scale))
 
     # --- Vector components (24) ---
     saved_figures.append(plot_timeseries(
