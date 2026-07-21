@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TSI_DIR = ROOT / "data" / "tsi"
 DEFAULT_BINS = TSI_DIR / "TSI_OPS3330_bin_boundaries.xlsx"
 
-TSI_MULTI_FILES = ("TSI_1.csv", "TSI_2.csv")
+TSI_MULTI_GLOB = "TSI_[0-9]*.csv"
 TSI_LEGACY_FILES = ("TSI_OPS3330.csv", "TSI.csv")
 
 OUTPUT_CSV = ROOT / "outputs" / "tsi" / "TSI_mean_PSD.csv"
@@ -46,7 +46,7 @@ FIGURE_DPI = 300
 
 def resolve_tsi_csv_files() -> list[Path]:
     """Return TSI export CSV paths (multi-file campaign preferred)."""
-    multi = [TSI_DIR / name for name in TSI_MULTI_FILES if (TSI_DIR / name).is_file()]
+    multi = sorted(TSI_DIR.glob(TSI_MULTI_GLOB))
     if multi:
         return multi
 
@@ -55,7 +55,7 @@ def resolve_tsi_csv_files() -> list[Path]:
         if path.is_file():
             return [path]
 
-    expected = ", ".join(TSI_MULTI_FILES + TSI_LEGACY_FILES)
+    expected = f"{TSI_MULTI_GLOB} or " + ", ".join(TSI_LEGACY_FILES)
     raise FileNotFoundError(
         f"TSI CSV not found in {TSI_DIR} (expected one of: {expected})"
     )
@@ -172,7 +172,7 @@ def load_tsi_spectra(csv_path: Path | None = None) -> tuple[pd.DataFrame, dict[s
     """
     Load TSI export(s): metadata, sized-bin table, and per-sample concentrations.
 
-    When csv_path is omitted, loads TSI_1.csv and TSI_2.csv when present and
+    When csv_path is omitted, loads TSI_1.csv, TSI_2.csv, … when present and
     concatenates them in timestamp order.
 
     Returns

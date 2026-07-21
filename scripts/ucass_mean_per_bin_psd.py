@@ -46,13 +46,13 @@ UCASS_SOURCES = {
     },
     2: {
         "csv": UCASS362_CSV,
-        "sep": ",",
+        "sep": ";",
         "id_col": "UCASS_ID.1",
         "bin_suffix": ".1",
     },
     6: {
         "csv": UCASS362_CSV,
-        "sep": ",",
+        "sep": ";",
         "id_col": "UCASS_ID",
         "bin_suffix": "",
     },
@@ -128,6 +128,9 @@ def load_calibrations() -> dict:
 
 def load_ucass_csv(ucass_file: Path, sep: str = ",") -> pd.DataFrame:
     df = pd.read_csv(ucass_file, skiprows=4, sep=sep, low_memory=False)
+    if "GPS_Date" not in df.columns:
+        alt_sep = "," if sep == ";" else ";"
+        df = pd.read_csv(ucass_file, skiprows=4, sep=alt_sep, low_memory=False)
     df["Timestamp"] = pd.to_datetime(
         df["GPS_Date"].astype(str) + " " + df["GPS_Time[UTC]"].astype(str),
         format=UCASS_DATE_FORMAT,

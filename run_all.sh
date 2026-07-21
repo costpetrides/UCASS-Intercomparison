@@ -26,10 +26,10 @@ echo "Using: $PYTHON"
 "$PYTHON" scripts/overlap_period_dN_dlnDp_comparison.py
 "$PYTHON" scripts/tsi_mean_psd.py
 "$PYTHON" scripts/tsi_mean_dN_dlnDp.py
-"$PYTHON" scripts/plot_combined_dN_dlnDp_FIDAS_UCASS_TSI.py
 "$PYTHON" scripts/mean_dN_dlnDp_by_wind_speed.py
 "$PYTHON" scripts/mean_dN_dlnDp_by_wind_direction.py
 "$PYTHON" scripts/overlap_period_dN_dlnDp_comparison_FIDAS_UCASS_TSI.py
+"$PYTHON" scripts/plot_combined_dN_dlnDp_FIDAS_UCASS_TSI.py
 "$PYTHON" scripts/overlap_mean_total_concentration.py
 "$PYTHON" scripts/wind_meteorology_analysis.py
 

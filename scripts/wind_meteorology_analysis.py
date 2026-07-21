@@ -38,8 +38,8 @@ TOA5_SKIPROWS = 4
 UCASS_DATE_FORMAT = "%d/%m/%y %H:%M:%S"
 UCASS_OVERLAP_SOURCES = {
     1: {"csv": "UCASS13.csv", "sep": ";", "id_col": "UCASS_ID"},
-    2: {"csv": "UCASS62.csv", "sep": ",", "id_col": "UCASS_ID.1"},
-    6: {"csv": "UCASS62.csv", "sep": ",", "id_col": "UCASS_ID"},
+    2: {"csv": "UCASS62.csv", "sep": ";", "id_col": "UCASS_ID.1"},
+    6: {"csv": "UCASS62.csv", "sep": ";", "id_col": "UCASS_ID"},
 }
 WIND_DATA_PATTERN = re.compile(
     r'"?(20\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"?,\s*'
@@ -209,6 +209,9 @@ def resolve_experiment_day() -> pd.Timestamp:
         cache_key = (csv_path, cfg["sep"])
         if cache_key not in raw_cache:
             raw = pd.read_csv(csv_path, skiprows=4, sep=cfg["sep"], low_memory=False)
+            if "GPS_Date" not in raw.columns:
+                alt_sep = "," if cfg["sep"] == ";" else ";"
+                raw = pd.read_csv(csv_path, skiprows=4, sep=alt_sep, low_memory=False)
             raw["Timestamp"] = pd.to_datetime(
                 raw["GPS_Date"].astype(str) + " " + raw["GPS_Time[UTC]"].astype(str),
                 format=UCASS_DATE_FORMAT,
@@ -519,6 +522,9 @@ def _ucass_overlap_period_bounds(wind_df: pd.DataFrame) -> tuple[pd.Timestamp, p
         cache_key = (csv_path, cfg["sep"])
         if cache_key not in raw_cache:
             raw = pd.read_csv(csv_path, skiprows=4, sep=cfg["sep"], low_memory=False)
+            if "GPS_Date" not in raw.columns:
+                alt_sep = "," if cfg["sep"] == ";" else ";"
+                raw = pd.read_csv(csv_path, skiprows=4, sep=alt_sep, low_memory=False)
             raw["Timestamp"] = pd.to_datetime(
                 raw["GPS_Date"].astype(str) + " " + raw["GPS_Time[UTC]"].astype(str),
                 format=UCASS_DATE_FORMAT,
@@ -784,8 +790,6 @@ def plot_monthly_hourly_heatmap(
 
 
 def plot_monthly_wind_speed(monthly_stats: pd.DataFrame) -> Path | None:
-    if len(monthly_stats) < 2:
-        return None
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.bar(
         monthly_stats["month_number"].astype(str),

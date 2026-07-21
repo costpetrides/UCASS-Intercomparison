@@ -79,7 +79,9 @@ def resolve_bin_column(
 
 
 def load_ucass_csv(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path, skiprows=4, sep=",", low_memory=False)
+    df = pd.read_csv(path, skiprows=4, sep=";", low_memory=False)
+    if "GPS_Date" not in df.columns:
+        df = pd.read_csv(path, skiprows=4, sep=",", low_memory=False)
     df["Timestamp"] = pd.to_datetime(
         df["GPS_Date"].astype(str) + " " + df["GPS_Time[UTC]"].astype(str),
         format=UCASS_DATE_FORMAT,

@@ -32,9 +32,11 @@ if str(SCRIPTS) not in sys.path:
 from tsi_mean_psd import load_tsi_spectra
 from fidas_utils import (
     diameter_from_column,
+    filter_to_reference_timestamps,
     is_psd_column,
     load_fidas_excel,
-    resolve_common_overlap_period,
+    reference_period_bounds,
+    ucass_reference_timestamps,
 )
 
 # ---------------------------------------------------------------------------
@@ -67,8 +69,8 @@ OUTPUT_PNG = ROOT / "outputs" / "overlap" / "mean_total_particle_concentration.p
 UCASS_IDS = (1, 2, 6)
 UCASS_SOURCES = {
     1: {"csv": UCASS27_CSV, "sep": ";", "id_col": "UCASS_ID", "bin_suffix": ""},
-    2: {"csv": UCASS362_CSV, "sep": ",", "id_col": "UCASS_ID.1", "bin_suffix": ".1"},
-    6: {"csv": UCASS362_CSV, "sep": ",", "id_col": "UCASS_ID", "bin_suffix": ""},
+    2: {"csv": UCASS362_CSV, "sep": ";", "id_col": "UCASS_ID.1", "bin_suffix": ".1"},
+    6: {"csv": UCASS362_CSV, "sep": ";", "id_col": "UCASS_ID", "bin_suffix": ""},
 }
 SAMPLE_AREA = 5.0e-07
 UCASS_DATE_FORMAT = "%d/%m/%y %H:%M:%S"
@@ -103,11 +105,15 @@ BAR_COLORS = {
 
 
 # ---------------------------------------------------------------------------
-# Period filter
+# Reference timestamps (UCASS 1/2/6 + wind exact overlap)
 # ---------------------------------------------------------------------------
 
-def in_period(ts: pd.Series, start: pd.Timestamp, end: pd.Timestamp) -> pd.Series:
-    return (ts >= start) & (ts <= end)
+def select_reference_period(
+    master: pd.DataFrame,
+) -> tuple[pd.DatetimeIndex, pd.Timestamp, pd.Timestamp]:
+    reference = ucass_reference_timestamps(master)
+    period_start, period_end = reference_period_bounds(reference)
+    return reference, period_start, period_end
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +134,9 @@ def load_bins_table(bins_file: Path) -> pd.DataFrame:
 
 def load_ucass_csv(path: Path, sep: str) -> pd.DataFrame:
     df = pd.read_csv(path, skiprows=4, sep=sep, low_memory=False)
+    if "GPS_Date" not in df.columns:
+        alt_sep = "," if sep == ";" else ";"
+        df = pd.read_csv(path, skiprows=4, sep=alt_sep, low_memory=False)
     df["Timestamp"] = pd.to_datetime(
         df["GPS_Date"].astype(str) + " " + df["GPS_Time[UTC]"].astype(str),
         format=UCASS_DATE_FORMAT,
@@ -216,10 +225,9 @@ def fidas_psd_columns_in_tsi_range(columns: pd.Index) -> list[str]:
 def ucass_mean_total_concentration(
     master: pd.DataFrame,
     uid: int,
-    period_start: pd.Timestamp,
-    period_end: pd.Timestamp,
+    reference_timestamps: pd.DatetimeIndex,
 ) -> tuple[float, int, str]:
-    period = master.loc[in_period(master["Timestamp"], period_start, period_end)].copy()
+    period = filter_to_reference_timestamps(master, reference_timestamps).copy()
     bin_nums = ucass_bins_overlapping_tsi_range(uid)
     count_cols = [f"b{i}_id{uid}" for i in bin_nums]
     counts = period[count_cols].to_numpy(dtype=float)
@@ -244,10 +252,9 @@ def load_fidas() -> pd.DataFrame:
 
 def fidas_mean_total_concentration(
     df: pd.DataFrame,
-    period_start: pd.Timestamp,
-    period_end: pd.Timestamp,
+    reference_timestamps: pd.DatetimeIndex,
 ) -> tuple[float, int, str]:
-    period = df.loc[in_period(df["Timestamp"], period_start, period_end)].copy()
+    period = filter_to_reference_timestamps(df, reference_timestamps).copy()
     psd_cols = fidas_psd_columns_in_tsi_range(period.columns)
     psd = period[psd_cols].apply(pd.to_numeric, errors="coerce")
     valid = psd.notna().all(axis=1)
@@ -266,10 +273,9 @@ def fidas_mean_total_concentration(
 def tsi_mean_total_concentration(
     spectra: pd.DataFrame,
     bins: pd.DataFrame,
-    period_start: pd.Timestamp,
-    period_end: pd.Timestamp,
+    reference_timestamps: pd.DatetimeIndex,
 ) -> tuple[float, int, str]:
-    period = spectra.loc[in_period(spectra["Timestamp"], period_start, period_end)].copy()
+    period = filter_to_reference_timestamps(spectra, reference_timestamps).copy()
     conc_cols = [f"conc_Bin_{int(b)}" for b in bins["Bin"]]
     conc_data = period[conc_cols].apply(pd.to_numeric, errors="coerce")
     valid = conc_data.notna().all(axis=1)
@@ -284,14 +290,6 @@ def tsi_mean_total_concentration(
 # ---------------------------------------------------------------------------
 # Overlap window and outputs
 # ---------------------------------------------------------------------------
-
-def resolve_overlap_period(
-    ucass_master: pd.DataFrame,
-    fidas_df: pd.DataFrame,
-    tsi_spectra: pd.DataFrame,
-) -> tuple[pd.Timestamp, pd.Timestamp]:
-    return resolve_common_overlap_period(ucass_master, fidas_df, tsi_spectra)
-
 
 def plot_summary(summary: pd.DataFrame, period_start: pd.Timestamp, period_end: pd.Timestamp) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -328,21 +326,21 @@ def main() -> None:
     fidas_df = load_fidas()
     tsi_spectra, _, tsi_bins = load_tsi_spectra()
 
-    period_start, period_end = resolve_overlap_period(master, fidas_df, tsi_spectra)
+    reference, period_start, period_end = select_reference_period(master)
 
     rows = []
     for label, family, uid in INSTRUMENT_ORDER:
         if family == "UCASS":
             mean_conc, n_samples, size_range = ucass_mean_total_concentration(
-                master, uid, period_start, period_end,
+                master, uid, reference,
             )
         elif family == "FIDAS":
             mean_conc, n_samples, size_range = fidas_mean_total_concentration(
-                fidas_df, period_start, period_end,
+                fidas_df, reference,
             )
         else:
             mean_conc, n_samples, size_range = tsi_mean_total_concentration(
-                tsi_spectra, tsi_bins, period_start, period_end,
+                tsi_spectra, tsi_bins, reference,
             )
 
         rows.append({
@@ -359,9 +357,10 @@ def main() -> None:
     summary.to_csv(OUTPUT_CSV, index=False)
     plot_summary(summary, period_start, period_end)
 
-    print("Mean total particle concentration (overlapping period)")
+    print("Mean total particle concentration (UCASS-matched timestamps)")
     print("=" * 56)
-    print(f"Period: {period_start} -> {period_end} UTC")
+    print(f"UCASS reference timestamps: {len(reference)}")
+    print(f"Period bounds: {period_start} -> {period_end} UTC")
     print(summary.to_string(index=False))
     print(f"\nSaved CSV : {OUTPUT_CSV}")
     print(f"Saved plot: {OUTPUT_PNG}")

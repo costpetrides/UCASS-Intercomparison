@@ -165,11 +165,37 @@ def resolve_common_overlap_period(
     return period_start, period_end
 
 
+def ucass_reference_timestamps(ucass_master: pd.DataFrame) -> pd.DatetimeIndex:
+    """Sorted unique timestamps where UCASS 1/2/6 (and wind, if merged) overlap."""
+    return pd.DatetimeIndex(ucass_master["Timestamp"].sort_values().unique())
+
+
+def reference_period_bounds(
+    reference: pd.DatetimeIndex,
+) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Inclusive start/end for display from a reference timestamp set."""
+    if reference.empty:
+        raise ValueError("Reference timestamp set is empty.")
+    return reference.min(), reference.max()
+
+
+def filter_to_reference_timestamps(
+    df: pd.DataFrame,
+    reference: pd.DatetimeIndex,
+    *,
+    timestamp_col: str = "Timestamp",
+) -> pd.DataFrame:
+    """Keep rows whose timestamp is exactly in the UCASS reference set."""
+    if reference.empty:
+        return df.iloc[0:0].copy()
+    return df.loc[df[timestamp_col].isin(reference)].copy()
+
+
 UCASS_DATE_FORMAT = "%d/%m/%y %H:%M:%S"
 UCASS_SOURCES = {
     1: {"csv": "UCASS13.csv", "sep": ";", "id_col": "UCASS_ID"},
-    2: {"csv": "UCASS62.csv", "sep": ",", "id_col": "UCASS_ID.1"},
-    6: {"csv": "UCASS62.csv", "sep": ",", "id_col": "UCASS_ID"},
+    2: {"csv": "UCASS62.csv", "sep": ";", "id_col": "UCASS_ID.1"},
+    6: {"csv": "UCASS62.csv", "sep": ";", "id_col": "UCASS_ID"},
 }
 
 
@@ -186,6 +212,9 @@ def resolve_ucass_measurement_period(
         cache_key = (csv_path, cfg["sep"])
         if cache_key not in raw_cache:
             raw = pd.read_csv(csv_path, skiprows=4, sep=cfg["sep"], low_memory=False)
+            if "GPS_Date" not in raw.columns:
+                alt_sep = "," if cfg["sep"] == ";" else ";"
+                raw = pd.read_csv(csv_path, skiprows=4, sep=alt_sep, low_memory=False)
             raw["Timestamp"] = pd.to_datetime(
                 raw["GPS_Date"].astype(str) + " " + raw["GPS_Time[UTC]"].astype(str),
                 format=UCASS_DATE_FORMAT,

@@ -89,8 +89,8 @@ SCATTER_PAIRS = [(1, 2), (1, 6), (6, 2)]
 
 UCASS_SOURCES = {
     1: {"csv": UCASS13_CSV, "sep": ";", "id_col": "UCASS_ID"},
-    2: {"csv": UCASS362_CSV, "sep": ",", "id_col": "UCASS_ID.1"},
-    6: {"csv": UCASS362_CSV, "sep": ",", "id_col": "UCASS_ID"},
+    2: {"csv": UCASS362_CSV, "sep": ";", "id_col": "UCASS_ID.1"},
+    6: {"csv": UCASS362_CSV, "sep": ";", "id_col": "UCASS_ID"},
 }
 
 
@@ -122,6 +122,9 @@ def resolve_bin_columns(
 
 def load_ucass_csv(path: Path, sep: str = ",") -> pd.DataFrame:
     df = pd.read_csv(path, skiprows=4, sep=sep, low_memory=False)
+    if "GPS_Date" not in df.columns:
+        alt_sep = "," if sep == ";" else ";"
+        df = pd.read_csv(path, skiprows=4, sep=alt_sep, low_memory=False)
     df["Timestamp"] = pd.to_datetime(
         df["GPS_Date"].astype(str) + " " + df["GPS_Time[UTC]"].astype(str),
         format=UCASS_DATE_FORMAT,

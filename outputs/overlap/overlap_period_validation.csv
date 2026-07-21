@@ -1,11 +1,11 @@
 instrument,UCASS_ID,check,expected,actual,abs_diff,rel_diff,pass
-UCASS,1,sum(conc_i) == sum(dN/dlnDp * dlnDp),2.416293687167546,2.416293687167546,0.0,0.0,True
-UCASS,1,sum(conc_i) == total_counts/total_V,2.416293687167546,2.416293687167546,0.0,0.0,True
-UCASS,2,sum(conc_i) == sum(dN/dlnDp * dlnDp),0.11643095043952366,0.11643095043952366,0.0,0.0,True
-UCASS,2,sum(conc_i) == total_counts/total_V,0.11643095043952366,0.11643095043952366,0.0,0.0,True
-UCASS,6,sum(conc_i) == sum(dN/dlnDp * dlnDp),1.334802246312168,1.334802246312168,0.0,0.0,True
-UCASS,6,sum(conc_i) == total_counts/total_V,1.334802246312168,1.334802246312168,0.0,0.0,True
-FIDAS,—,sum(conc_i) == sum(dN/dlnDp * dlnDp),282.58508060651656,282.58508060651656,0.0,0.0,True
-FIDAS,—,sum(conc_i) == sum(N_i)/sum(V) (primary total concentration),282.58508060651656,282.58508060651656,0.0,0.0,True
-FIDAS,—,sum(conc_i) == volume-weighted mean Cn (export cross-check),282.58508060651656,282.9745839838879,0.3895033773713408,0.0013764606414034641,True
+UCASS,1,sum(conc_i) == sum(dN/dlnDp * dlnDp),1.1076315150888587,1.1076315150888587,0.0,0.0,True
+UCASS,1,sum(conc_i) == total_counts/total_V,1.1076315150888587,1.1076315150888592,4.440892098500626e-16,4.0093587425095593e-16,True
+UCASS,2,sum(conc_i) == sum(dN/dlnDp * dlnDp),0.1107535790301452,0.1107535790301452,0.0,0.0,True
+UCASS,2,sum(conc_i) == total_counts/total_V,0.1107535790301452,0.1107535790301452,0.0,0.0,True
+UCASS,6,sum(conc_i) == sum(dN/dlnDp * dlnDp),1.6065491070552522,1.6065491070552522,0.0,0.0,True
+UCASS,6,sum(conc_i) == total_counts/total_V,1.6065491070552522,1.6065491070552522,0.0,0.0,True
+FIDAS,—,sum(conc_i) == sum(dN/dlnDp * dlnDp),309.9255320057454,309.9255320057454,0.0,0.0,True
+FIDAS,—,sum(conc_i) == sum(N_i)/sum(V) (primary total concentration),309.9255320057454,309.9255320057454,0.0,0.0,True
+FIDAS,—,sum(conc_i) == volume-weighted mean Cn (export cross-check),309.9255320057454,309.9229467406327,0.0025852651127138415,8.341568685815519e-06,True
 FIDAS,—,conc_i == sum(N_i)/sum(V) per bin (max abs diff),0.0,0.0,0.0,0.0,True

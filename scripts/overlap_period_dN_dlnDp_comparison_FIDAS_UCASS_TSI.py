@@ -2,9 +2,8 @@
 """
 Overlap-period FIDAS vs UCASS vs TSI dN/dlnDp comparison (standalone analysis).
 
-Uses the common measurement window where all three instruments overlap:
-  UCASS campaign window: 2026-06-23 06:53:32 -> 2026-06-23 10:31:23 UTC
-  clipped to TSI availability (TSI test start + first elapsed sample).
+Uses the exact UCASS reference timestamps where UCASS 1/2/6 and wind overlap.
+FIDAS and TSI spectra are included only when their timestamp matches exactly.
 
 UCASS: volume-weighted  sum(counts_i) / sum(V)  (Intercomparison.py method)
 FIDAS: volume-weighted  sum(n_i * V) / sum(V)    with V = Flowrate_Lpm * 1 min
@@ -34,10 +33,12 @@ from tsi_mean_psd import load_tsi_spectra
 from plot_utils import mask_nonpositive_for_log
 from fidas_utils import (
     diameter_from_column,
+    filter_to_reference_timestamps,
     geometric_bin_boundaries,
     load_fidas_excel,
-    resolve_common_overlap_period,
+    reference_period_bounds,
     sorted_psd_columns,
+    ucass_reference_timestamps,
 )
 
 # ---------------------------------------------------------------------------
@@ -62,8 +63,8 @@ OUTPUT_VALIDATION_CSV = ROOT / "outputs" / "overlap" / "overlap_period_FIDAS_UCA
 UCASS_IDS = (1, 2, 6)
 UCASS_SOURCES = {
     1: {"csv": UCASS27_CSV, "sep": ";", "id_col": "UCASS_ID", "bin_suffix": ""},
-    2: {"csv": UCASS362_CSV, "sep": ",", "id_col": "UCASS_ID.1", "bin_suffix": ".1"},
-    6: {"csv": UCASS362_CSV, "sep": ",", "id_col": "UCASS_ID", "bin_suffix": ""},
+    2: {"csv": UCASS362_CSV, "sep": ";", "id_col": "UCASS_ID.1", "bin_suffix": ".1"},
+    6: {"csv": UCASS362_CSV, "sep": ";", "id_col": "UCASS_ID", "bin_suffix": ""},
 }
 CALIBRATION_MAP = {1: "AA001", 6: "AA006", 2: "AD002"}
 SAMPLE_AREA = 5.0e-07
@@ -86,11 +87,15 @@ TSI_COLOR = "#d62728"
 
 
 # ---------------------------------------------------------------------------
-# Period filter
+# Reference timestamps (UCASS 1/2/6 + wind exact overlap)
 # ---------------------------------------------------------------------------
 
-def in_overlap_period(ts: pd.Series, start: pd.Timestamp, end: pd.Timestamp) -> pd.Series:
-    return (ts >= start) & (ts <= end)
+def select_reference_period(
+    master: pd.DataFrame,
+) -> tuple[pd.DatetimeIndex, pd.Timestamp, pd.Timestamp]:
+    reference = ucass_reference_timestamps(master)
+    period_start, period_end = reference_period_bounds(reference)
+    return reference, period_start, period_end
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +130,9 @@ def load_calibrations() -> dict:
 
 def load_ucass_csv(path: Path, sep: str) -> pd.DataFrame:
     df = pd.read_csv(path, skiprows=4, sep=sep, low_memory=False)
+    if "GPS_Date" not in df.columns:
+        alt_sep = "," if sep == ";" else ";"
+        df = pd.read_csv(path, skiprows=4, sep=alt_sep, low_memory=False)
     df["Timestamp"] = pd.to_datetime(
         df["GPS_Date"].astype(str) + " " + df["GPS_Time[UTC]"].astype(str),
         format=UCASS_DATE_FORMAT,
@@ -192,10 +200,9 @@ def ucass_dln_dp(centres: np.ndarray) -> np.ndarray:
 def compute_ucass_overlap_psd(
     master: pd.DataFrame,
     ucass_bins: dict[int, np.ndarray],
-    period_start: pd.Timestamp,
-    period_end: pd.Timestamp,
+    reference_timestamps: pd.DatetimeIndex,
 ) -> tuple[dict, pd.DataFrame]:
-    period = master.loc[in_overlap_period(master["Timestamp"], period_start, period_end)].copy()
+    period = filter_to_reference_timestamps(master, reference_timestamps).copy()
     sample_vol = period["sample_vol_cm3"].to_numpy(dtype=float)
     total_vol = sample_vol.sum()
 
@@ -227,15 +234,14 @@ def load_fidas() -> pd.DataFrame:
 
 def compute_fidas_overlap_psd(
     df: pd.DataFrame,
-    period_start: pd.Timestamp,
-    period_end: pd.Timestamp,
+    reference_timestamps: pd.DatetimeIndex,
 ) -> tuple[dict, pd.DataFrame]:
     psd_cols = sorted_psd_columns(df.columns)
     centres = np.array([diameter_from_column(c) for c in psd_cols])
     lower, upper = geometric_bin_boundaries(centres)
     dln = np.log(upper / lower)
 
-    period = df.loc[in_overlap_period(df["Timestamp"], period_start, period_end)].copy()
+    period = filter_to_reference_timestamps(df, reference_timestamps).copy()
     psd = period[psd_cols].apply(pd.to_numeric, errors="coerce")
     valid_mask = psd.notna().all(axis=1)
     period = period.loc[valid_mask]
@@ -278,15 +284,14 @@ def compute_fidas_overlap_psd(
 def compute_tsi_overlap_psd(
     spectra: pd.DataFrame,
     bins: pd.DataFrame,
-    period_start: pd.Timestamp,
-    period_end: pd.Timestamp,
+    reference_timestamps: pd.DatetimeIndex,
 ) -> tuple[dict, pd.DataFrame]:
     centres = bins["Diameter_um"].to_numpy(dtype=float)
     lower = bins["Lower_um"].to_numpy(dtype=float)
     upper = bins["Upper_um"].to_numpy(dtype=float)
     dln = np.log(upper / lower)
 
-    period = spectra.loc[in_overlap_period(spectra["Timestamp"], period_start, period_end)].copy()
+    period = filter_to_reference_timestamps(spectra, reference_timestamps).copy()
     conc_cols = [f"conc_Bin_{int(b)}" for b in bins["Bin"]]
     conc_data = period[conc_cols].apply(pd.to_numeric, errors="coerce")
     valid_mask = conc_data.notna().all(axis=1)
@@ -444,6 +449,7 @@ def plot_comparison(
 
 
 def print_report(
+    reference_timestamps: pd.DatetimeIndex,
     period_start: pd.Timestamp,
     period_end: pd.Timestamp,
     ucass_period: pd.DataFrame,
@@ -457,9 +463,10 @@ def print_report(
     print("=" * 72)
     print("OVERLAP-PERIOD FIDAS vs UCASS vs TSI dN/dlnDp COMPARISON")
     print("=" * 72)
-    print(f"Period (inclusive): {period_start} -> {period_end} UTC")
+    print(f"UCASS reference timestamps : {len(reference_timestamps)}")
+    print(f"Period bounds (inclusive)  : {period_start} -> {period_end} UTC")
     print()
-    print("RECORD COUNTS")
+    print("RECORD COUNTS (exact timestamp match to UCASS reference)")
     print(f"  UCASS master rows in period : {len(ucass_period)}")
     print(f"  FIDAS spectra in period     : {fidas['n_records']}")
     print(f"  TSI spectra in period       : {tsi['n_records']}")
@@ -501,24 +508,29 @@ def main() -> None:
     tsi_spectra, _, tsi_bins = load_tsi_spectra()
     master = build_ucass_master()
     fidas_df = load_fidas()
-    period_start, period_end = resolve_common_overlap_period(
-        master, fidas_df, tsi_spectra,
-    )
+    reference, period_start, period_end = select_reference_period(master)
 
     cal = load_calibrations()
     ucass_bins = {uid: cal[CALIBRATION_MAP[uid]]["centre"][1:] for uid in UCASS_IDS}
 
     ucass_results, ucass_period = compute_ucass_overlap_psd(
-        master, ucass_bins, period_start, period_end,
+        master, ucass_bins, reference,
     )
 
     fidas_results, fidas_period = compute_fidas_overlap_psd(
-        fidas_df, period_start, period_end,
+        fidas_df, reference,
     )
 
     tsi_results, tsi_period = compute_tsi_overlap_psd(
-        tsi_spectra, tsi_bins, period_start, period_end,
+        tsi_spectra, tsi_bins, reference,
     )
+
+    if len(ucass_period) == 0:
+        raise RuntimeError("No UCASS records at reference timestamps.")
+    if fidas_results["n_records"] == 0:
+        raise RuntimeError("No FIDAS spectra at UCASS reference timestamps.")
+    if tsi_results["n_records"] == 0:
+        raise RuntimeError("No TSI spectra at UCASS reference timestamps.")
 
     validation = run_validations(ucass_results, fidas_results, tsi_results)
 
@@ -531,7 +543,7 @@ def main() -> None:
             "Validation failed — see overlap_period_FIDAS_UCASS_TSI_validation.csv"
         )
     print_report(
-        period_start, period_end,
+        reference, period_start, period_end,
         ucass_period, fidas_period, tsi_period,
         ucass_results, fidas_results, tsi_results, validation,
     )
